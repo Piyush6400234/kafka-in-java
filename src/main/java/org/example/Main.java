@@ -4,14 +4,43 @@ package org.example;
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
     public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        System.out.printf("Hello and welcome!");
+        String bootstrapServers = "localhost:9092";
+        String topic = "partition-topic";
+        String deadLetterTopic = "dead-letter-topic";
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            System.out.println("i = " + i);
-        }
+        CreateTopic topicCreator = new CreateTopic(bootstrapServers);
+        topicCreator.createTopic("partition-topic", 3, (short) 1);
+        topicCreator.createTopic("dead-letter-topic", 1, (short)1);
+
+        // Run the Producer in a separate thread
+        new Thread(() -> {
+            Producer producer = new Producer(bootstrapServers);
+            for (int i = 1; i <= 15; i++) {
+                if(i%10 == 0){
+                    PayloadObject p2 = new PayloadObject("Piyush"+1, "piyush"+i*23+"@gmail.com", i*85+"85421"+i*985, "fail");
+                    producer.sendMessage(topic, "key" + i, p2);
+                }
+                else{
+                    PayloadObject p1 = new PayloadObject("Piyush"+1, "piyush"+i*23+"@gmail.com", i*85+"85421"+i*985, ""+i*2);
+                    producer.sendMessage(topic, "key" + i, p1);
+                }
+
+                try {
+                    Thread.sleep(1000); // Simulate delay between messages
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            producer.close();
+        }).start();
+
+        // Run the Consumer in a separate thread
+        new Thread(() -> {
+            Producer producer = new Producer(bootstrapServers);
+            Consumer consumer = new Consumer(bootstrapServers, "group-A", producer, deadLetterTopic);
+            consumer.subscribeToTopic(topic);
+            consumer.consumeMessages();
+        }).start();
+
     }
 }
